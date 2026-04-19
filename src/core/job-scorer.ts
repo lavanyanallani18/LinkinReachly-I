@@ -137,6 +137,11 @@ function scoreSkillMatch(profile: UserProfile, job: JobPosting): { score: number
   const jobText = [job.title, job.description || '', ...(job.requirements || [])].join(' ').toLowerCase()
   const jobTokens = tokenize(jobText)
 
+  // Collect the full set of unique skill-like tokens present in the job text.
+  // This is used as the true denominator for baseRatio so that a single matching
+  // skill out of many does not produce a falsely inflated ratio.
+  const allJobSkillTokens = new Set<string>(jobTokens.filter(t => t.length > 2))
+
   const allProfileSkills = new Set<string>()
   for (const entry of profile.entries) {
     for (const skill of entry.skills || []) {
@@ -183,9 +188,14 @@ function scoreSkillMatch(profile: UserProfile, job: JobPosting): { score: number
     }
   }
 
-  const baseRatio = allProfileSkills.size > 0
-    ? matched.length / Math.max(matched.length + missing.length, 1)
-    : 0
+  // Use the total number of unique job-text skill tokens as the denominator.
+  // Previously the denominator was matched.length + missing.length, where
+  // missing only counts items from job.requirements (an optional structured
+  // field). When requirements is absent — the common case for scraped listings
+  // — missing.length is 0, so the denominator equals matched.length and any
+  // non-zero match incorrectly produces baseRatio = 1.0.
+  const denominator = Math.max(allJobSkillTokens.size, matched.length, 1)
+  const baseRatio = allProfileSkills.size > 0 ? matched.length / denominator : 0
   const recencyBonus = totalWeight > 0 ? weightedMatches / totalWeight : 0
   const score = Math.round(Math.min(100, (baseRatio * 60 + recencyBonus * 40)))
 

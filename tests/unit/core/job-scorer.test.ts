@@ -204,3 +204,87 @@ describe('rankJobsByFit', () => {
     expect(ranked[0].heuristicScore).toHaveProperty('dimensions')
   })
 })
+
+describe('scoreSkillMatch denominator correctness', () => {
+  it('does not inflate skill score when only one skill matches a skill-heavy job description', () => {
+    // Profile has only one skill: "python"
+    const sparseProfile = makeProfile({
+      entries: [
+        {
+          id: 'sparse1',
+          type: 'experience',
+          role: 'Analyst',
+          company: 'Acme',
+          location: 'NY',
+          startDate: 'Jan 2023',
+          endDate: 'Present',
+          durationMonths: 12,
+          skills: ['python'],
+          metrics: [],
+          domain: [],
+          experienceType: 'analyst',
+          bullets: [],
+          recencyWeight: 1.0
+        }
+      ]
+    })
+
+    // Job description mentions many distinct skills -- python is only one of them
+    const skillHeavyJob = makeJob({
+      title: 'Senior Data Engineer',
+      description: [
+        'Looking for a data engineer with expertise in Spark, Kafka, Flink, Airflow,',
+        'dbt, Snowflake, Redshift, SQL, Python, Scala, Go, Kubernetes, Docker,',
+        'Terraform, AWS, GCP, Azure, and distributed systems design.',
+        'Experience with ML pipelines, feature stores, and real-time streaming required.'
+      ].join(' '),
+      requirements: [] // no structured requirements -- the common real-world case
+    })
+
+    const result = scoreJobFitHeuristic(sparseProfile, skillHeavyJob)
+
+    // With the old (broken) formula: matched=1, missing=0 -> baseRatio = 1/max(1,1) = 1.0
+    // -> baseRatio component alone gives 60, pushing total score to ~60 or higher.
+    // With the fix: matched=1 out of ~60 job tokens -> baseRatio is very small.
+    // The recency component still gives some partial credit (score = 42 in practice),
+    // but the total is well below the inflated ~60+ the old formula produced.
+    expect(result.dimensions.skillMatch).toBeLessThan(50)
+  })
+
+  it('scores a genuinely strong skill match higher than a sparse one against the same job', () => {
+    const jobDescription = [
+      'Looking for an AI product leader with experience in machine learning, NLP,',
+      'product management, enterprise SaaS, B2B sales, Python, and fundraising.'
+    ].join(' ')
+
+    const strongProfile = makeProfile() // has AI, product, SaaS, B2B, fundraising, enterprise, strategy
+
+    const sparseProfile = makeProfile({
+      entries: [
+        {
+          id: 'sp1',
+          type: 'experience',
+          role: 'Intern',
+          company: 'Corp',
+          location: 'NY',
+          startDate: 'Jan 2024',
+          endDate: 'Jun 2024',
+          durationMonths: 6,
+          skills: ['python'],
+          metrics: [],
+          domain: [],
+          experienceType: 'intern',
+          bullets: [],
+          recencyWeight: 1.0
+        }
+      ]
+    })
+
+    const job = makeJob({ description: jobDescription, requirements: [] })
+    const strongScore = scoreJobFitHeuristic(strongProfile, job).dimensions.skillMatch
+    const sparseScore = scoreJobFitHeuristic(sparseProfile, job).dimensions.skillMatch
+
+    // A profile matching many of the job's skills should outscore one matching only one
+    expect(strongScore).toBeGreaterThan(sparseScore)
+  })
+})
