@@ -14,7 +14,7 @@ caused by a missing build artifact:
 ```
 FAIL  tests/unit/main/easy-apply-guards.test.ts
   easy-apply guards
-    ✗ returns a user-facing unavailable message when SDUI force navigate
+    [FAIL] returns a user-facing unavailable message when SDUI force navigate
       lands back on jobs/view
 
 AssertionError: expected 'Could not find Easy Apply button.'
@@ -133,10 +133,10 @@ and `diagnosticSuggestsNonApplyLanding()` — runs without any modification.
 
 | Option | Verdict |
 |--------|---------|
-| Move the fallback inside `checkFormAlreadyOpen()` | ❌ Mixes concerns. That helper checks if a modal is already open — locate/click doesn't belong there. |
-| Always call bridge locate first, then CDP | ❌ Doubles round-trips in the common case where `tabId` is available. Unnecessary latency. |
-| Add the else-branch mirroring the original bridge path | ✅ Minimal delta. Zero changes to existing CDP logic. All downstream logic reused unchanged. |
-| Change the test to expect the generic message | ❌ The test is correct. The message it expects is more actionable. Fixing the test would hide the real defect. |
+| Move the fallback inside `checkFormAlreadyOpen()` | [NO] Mixes concerns. That helper checks if a modal is already open — locate/click doesn't belong there. |
+| Always call bridge locate first, then CDP | [NO] Doubles round-trips in the common case where `tabId` is available. Unnecessary latency. |
+| Add the else-branch mirroring the original bridge path | [YES] Minimal delta. Zero changes to existing CDP logic. All downstream logic reused unchanged. |
+| Change the test to expect the generic message | [NO] The test is correct. The message it expects is more actionable. Fixing the test would hide the real defect. |
 
 ### Code judgment
 
@@ -156,21 +156,21 @@ No other logic, configuration, type definitions, or other modules were touched.
 
 ```
 FAIL tests/unit/main/easy-apply-guards.test.ts
-  ✗ returns a user-facing unavailable message when SDUI force navigate
+  [FAIL] returns a user-facing unavailable message when SDUI force navigate
     lands back on jobs/view
 ```
 
 ### Tests after the fix
 
 ```
-✓ tests/unit/main/easy-apply-guards.test.ts (4 tests)
-  ✓ easy-apply guards
-    ✓ returns a user-facing unavailable message when SDUI force navigate
+[PASS] tests/unit/main/easy-apply-guards.test.ts (4 tests)
+  [PASS] easy-apply guards
+    [PASS] returns a user-facing unavailable message when SDUI force navigate
       lands back on jobs/view                                          ← was FAILING
-    ✓ returns stale extension result when warning-check page text action is stale
-  ✓ easy-apply bridge-command fallback (no active CDP tab)            ← NEW
-    ✓ calls LOCATE_EASY_APPLY_BUTTON then CLICK_EASY_APPLY when tabId is null
-    ✓ returns generic error when bridge-command locate fails (no CDP tab, form not open)
+    [PASS] returns stale extension result when warning-check page text action is stale
+  [PASS] easy-apply bridge-command fallback (no active CDP tab)            ← NEW
+    [PASS] calls LOCATE_EASY_APPLY_BUTTON then CLICK_EASY_APPLY when tabId is null
+    [PASS] returns generic error when bridge-command locate fails (no CDP tab, form not open)
 ```
 
 ### New tests and what they cover
