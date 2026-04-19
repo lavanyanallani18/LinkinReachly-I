@@ -593,6 +593,35 @@ export async function easyApplyClickApplyButton(
           }
         }
       }
+    } else {
+      // No active CDP tab — fall back to the bridge-command locate+click path.
+      // This path is exercised by tests (which mock easyApplyBridgeCommand) and
+      // by any runtime scenario where the Chrome tab is not registered yet.
+      appLog.info('[easy-apply] No active tab for CDP locate — using bridge-command fallback')
+      applyTrace('easy_apply:bridge_locate_fallback', {})
+      const locateRes = await easyApplyBridgeCommand('LOCATE_EASY_APPLY_BUTTON', {}, 'click_apply', 'bridge_locate')
+      if (!locateRes.ok) {
+        // Bridge locate failed — surface the detail if meaningful, otherwise fall
+        // through to the generic "form already open" check below.
+        appLog.info('[easy-apply] Bridge locate: not ok', { detail: locateRes.detail })
+      } else {
+        const locateData = 'data' in locateRes && locateRes.data && typeof locateRes.data === 'object'
+          ? locateRes.data as Record<string, unknown>
+          : {}
+        const bridgeSduiUrl = locateData.sduiApplyUrl ? String(locateData.sduiApplyUrl) : undefined
+        if (bridgeSduiUrl) locatedSduiApplyUrl = bridgeSduiUrl
+        applyTrace('easy_apply:bridge_locate_ok', { sduiApplyUrl: bridgeSduiUrl })
+
+        // Ask the extension to click the button
+        const bridgeClick = await easyApplyBridgeCommand('CLICK_EASY_APPLY', {}, 'click_apply', 'bridge_click')
+        clickResult = { ok: bridgeClick.ok, detail: bridgeClick.detail, data: 'data' in bridgeClick ? bridgeClick.data : undefined }
+
+        // If the extension reported an SDUI url from the click, capture it
+        const bridgeClickData = 'data' in bridgeClick && bridgeClick.data && typeof bridgeClick.data === 'object'
+          ? bridgeClick.data as Record<string, unknown>
+          : {}
+        if (bridgeClickData.sduiApplyUrl) locatedSduiApplyUrl = String(bridgeClickData.sduiApplyUrl)
+      }
     }
 
     if (!clickResult?.ok) {

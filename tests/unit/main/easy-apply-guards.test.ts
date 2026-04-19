@@ -151,3 +151,55 @@ describe('easy-apply guards', () => {
     )
   })
 })
+
+describe('easy-apply bridge-command fallback (no active CDP tab)', () => {
+  it('calls LOCATE_EASY_APPLY_BUTTON then CLICK_EASY_APPLY when tabId is null', async () => {
+    // Simulate: locate succeeds with plain (non-SDUI) button → click succeeds
+    sharedMocks.easyApplyBridgeCommand.mockImplementation((action: string) => {
+      if (action === 'LOCATE_EASY_APPLY_BUTTON') {
+        return Promise.resolve({ ok: true, detail: 'located', data: {} })
+      }
+      if (action === 'CLICK_EASY_APPLY') {
+        return Promise.resolve({ ok: true, detail: 'clicked_easy_apply' })
+      }
+      if (action === 'EXTRACT_FORM_FIELDS') {
+        return Promise.resolve({ ok: true, detail: 'ok', data: [] })
+      }
+      return Promise.resolve({ ok: false, detail: `unexpected_action:${action}` })
+    })
+
+    const { easyApplyClickApplyButton } = await import('../../../src/main/easy-apply/click-apply')
+    const runPromise = easyApplyClickApplyButton()
+    await vi.runAllTimersAsync()
+    const result = await runPromise
+
+    // LOCATE then CLICK must have been called in order
+    const calls = sharedMocks.easyApplyBridgeCommand.mock.calls.map((c) => c[0])
+    expect(calls[0]).toBe('LOCATE_EASY_APPLY_BUTTON')
+    expect(calls[1]).toBe('CLICK_EASY_APPLY')
+    // clickResult.ok was true → no SDUI path → no earlyExit
+    expect(result.earlyExit).toBeNull()
+  })
+
+  it('returns generic error when bridge-command locate fails (no CDP tab, form not open)', async () => {
+    sharedMocks.easyApplyBridgeCommand.mockImplementation((action: string) => {
+      if (action === 'LOCATE_EASY_APPLY_BUTTON') {
+        return Promise.resolve({ ok: false, detail: 'button_not_found' })
+      }
+      if (action === 'EXTRACT_FORM_FIELDS') {
+        // Form is not already open
+        return Promise.resolve({ ok: false, detail: 'no_modal', data: [] })
+      }
+      return Promise.resolve({ ok: false, detail: `unexpected_action:${action}` })
+    })
+
+    const { easyApplyClickApplyButton } = await import('../../../src/main/easy-apply/click-apply')
+    const runPromise = easyApplyClickApplyButton()
+    await vi.runAllTimersAsync()
+    const result = await runPromise
+
+    expect(result.earlyExit?.ok).toBe(false)
+    expect(result.earlyExit?.phase).toBe('click_apply')
+    expect(result.earlyExit?.detail).toMatch(/Could not find Easy Apply button/i)
+  })
+})
